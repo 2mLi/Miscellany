@@ -1,0 +1,101 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r new mod}
+precar1 <- read.csv("Precar_6324_Train.csv", header = T)
+precar2 <- read.csv("Precar_6324_Test.csv", header = T)
+# preHIFI <- read.csv("precar_plus_HIFI.csv")
+precar <- rbind(precar1[, 1:13], precar2)
+
+index <- read.csv("New_Scores.csv", header = F)
+index <- index[, c(1:4)]
+names(index) <- c("Patient", "Sample", "FollowUp", "Index")
+index$Index <- as.numeric(index$Index)
+
+# match up data
+library(dplyr)
+precar_index <- precar %>% 
+  left_join(index, by = c("Patient", "FollowUp"))
+precar <- precar_index
+
+
+# match up aMAP score
+amap <- read.delim("F:/Berry/mixAK/amap.txt", header=FALSE)
+names(amap) <- c("Sample", "aMAP")
+amap$Sample <- substr(amap$Sample, 1, 9)
+precar <- precar %>%
+  left_join(amap, by = c("Sample"))
+
+```
+
+```{r analyse trend}
+# remove EA-01 for too many missing values
+precar <- precar[!(substr(precar$Patient, 1, 5) == "EA-01" ),]
+precar$Index <- as.numeric(precar$Index)
+# Train <- precar[substr(precar$Patient, 1, 5) == "EA-02" | substr(precar$Patient, 1, 5) == "EA-03", ]
+# Test <- precar[!(substr(precar$Patient, 1, 5) == "EA-02" | substr(precar$Patient, 1, 5) == "EA-03"), ]
+rnd <- sample(unique(precar$Patient), 2100)
+Train <- precar[precar$Patient %in% rnd, ]
+Test <- precar[!(precar$Patient %in% rnd), ]
+mod <- GAM_LoDA(Train, Test, y = "Index", x = "empty", z = "Time", validation = "internal", seed.used = 6324, w.pred = c(0.8, 0.2), burn = 2000, keep =5000)
+mod$ggplot.train
+mod$ggplot.test
+
+```
+```{r}
+precar <- precar[!(substr(precar$Patient, 1, 5) == "EA-01" ),]
+precar$Index <- as.numeric(precar$Index)
+precar$Afp <- log1(precar$Afp)
+precar$Index <- log1(precar$Index)
+Train <- precar[substr(precar$Patient, 1, 5) == "EA-02" | substr(precar$Patient, 1, 5) == "EA-03", ]
+Test <- precar[!(substr(precar$Patient, 1, 5) == "EA-02" | substr(precar$Patient, 1, 5) == "EA-03"), ]
+
+# okay we still have to fill in the missing values
+# for now fill in mode? 
+Train$Index[is.na(Train$Index)] <- mean(Train$Index, na.rm = TRUE)
+Test$Index[is.na(Test$Index)] <- mean(Train$Index, na.rm = TRUE)
+
+
+mod_int <- GLMM_LoDA(Train, Test, y = c("Index", "Afp", "Updated_aMAP"), x = "empty", z = "Time", validation = "internal", seed.used = 6324, w.pred = c(0.8, 0.2), burn = 2000, keep =5000)
+mod_ext <- GLMM_LoDA(Train, Test, y = c("Index", "Afp", "Updated_aMAP"), x = "empty", z = "Time", validation = "external", seed.used = 6324, w.pred = c(0.8, 0.2), burn = 2000, keep =5000)
+
+
+```
+
+```{r new amap}
+
+Train <- read.csv("Precar_6324_Train_Ind.csv", header = T)
+Test <- read.csv("Precar_6324_Test_Ind.csv", header = T)
+
+# okay we still have to fill in the missing values
+# for now fill in mode? 
+Train$Index[is.na(Train$Index)] <- mean(Train$Index, na.rm = TRUE)
+Test$Index[is.na(Test$Index)] <- mean(Train$Index, na.rm = TRUE)
+
+
+mod_int <- GLMM_LoDA(Train, Test, y = c("Afp", "Updated_aMAP"), x = "empty", z = "Time", validation = "internal", seed.used = 6324, w.pred = c(0.8, 0.2), burn = 5000, keep =10000)
+mod_ext <- GLMM_LoDA(Train, Test, y = c("Afp", "Updated_aMAP"), x = "empty", z = "Time", validation = "external", seed.used = 6324, w.pred = c(0.8, 0.2), burn = 5000, keep =10000)
+
+
+```
+```{r new amap}
+precar$Index <- as.numeric(precar$Index)
+Train <- precar[substr(precar$Patient, 1, 5) == "EA-02" | substr(precar$Patient, 1, 5) == "EA-03", ]
+Test <- precar[!(substr(precar$Patient, 1, 5) == "EA-02" | substr(precar$Patient, 1, 5) == "EA-03"), ]
+# okay we still have to fill in the missing values
+# for now fill in mode? 
+Train$Index[is.na(Train$Index)] <- mean(Train$Index, na.rm = TRUE)
+Test$Index[is.na(Test$Index)] <- mean(Train$Index, na.rm = TRUE)
+
+
+mod_int <- GLMM_LoDA(Train, Test, y = c("Afp", "aMAP", "Index"), x = "empty", z = "Time", validation = "internal", seed.used = 6324, w.pred = c(0.8, 0.2), burn = 5000, keep =10000)
+mod_ext <- GLMM_LoDA(Train, Test, y = c("Afp", "aMAP", "Index"), x = "empty", z = "Time", validation = "external", seed.used = 6324, w.pred = c(0.8, 0.2), burn = 5000, keep =10000)
+
+
+```
